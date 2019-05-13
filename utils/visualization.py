@@ -1,4 +1,6 @@
+import os
 import importlib
+import warnings
 
 
 class WriterTensorboardX():
@@ -9,9 +11,9 @@ class WriterTensorboardX():
             try:
                 self.writer = importlib.import_module('tensorboardX').SummaryWriter(log_path)
             except ModuleNotFoundError:
-                message = "Warning: TensorboardX visualization is configured to use, but currently not installed on this machine. " + \
-                          "Please install the package by 'pip install tensorboardx' command or turn off the option in the 'config.json' file."
-                logger.warning(message)
+                message = """TensorboardX visualization is configured to use, but currently not installed on this machine. Please install the package by 'pip install tensorboardx' command or turn off the option in the 'config.json' file."""
+                warnings.warn(message, UserWarning)
+                logger.warn()
         self.step = 0
         self.mode = ''
 
