@@ -1,0 +1,56 @@
+{
+    "name": "hand_cls",
+    "n_gpu": 1,
+
+    "arch": {
+        "type": "TRN",
+        "args": {
+            "n_class": 9
+        }
+    },
+
+    "data_loader": {
+        "type": "Huawei",
+        "args":{
+            "data_dir": "/Outputs/ZJU_GestureData",
+            "list_path":"/Outputs/gesture_train.csv",
+            "batch_size": 16,
+            "shuffle": true,
+            "validation_split": 0.1,
+            "num_workers": 2
+
+        }
+    },
+
+    "optimizer": {
+        "type": "Adam",
+        "args":{
+            "lr": 1e-6,
+            "weight_decay": 1e-5,
+            "amsgrad": true
+        }
+    },
+    "loss": "bce",
+    "metrics": [
+        "acc"
+    ],
+    "lr_scheduler": {
+        "type": "StepLR",
+        "args": {
+            "step_size": 100,
+            "gamma": 0.1
+        }
+    },
+    "trainer": {
+        "epochs": 1000,
+        "save_dir": "saved/",
+        "save_period": 1,
+        "verbosity": 2,
+
+        "monitor": "min val_loss",
+        "early_stop": 10,
+
+        "tensorboardX": true,
+        "log_dir": "saved/runs"
+    }
+}

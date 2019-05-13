@@ -1,28 +1,30 @@
 import os
 import argparse
 import torch
-from tqdm import tqdm
 import data_loader.data_loaders as module_data
 import model.loss as module_loss
 import model.metric as module_metric
-import model.model as module_arch
+import model.HandSegNet as handseg
 from train import get_instance
+from data_loader.hand_seg_RHD import visual_mask
+import model.UNet as Unet
+import model.RefineNet as RefineNet
 
-
-def main(config, resume):
+def main(config, resume, visual):
     # setup data_loader instances
     data_loader = getattr(module_data, config['data_loader']['type'])(
         config['data_loader']['args']['data_dir'],
-        batch_size=512,
+        batch_size=1,
         shuffle=False,
         validation_split=0.0,
         training=False,
-        num_workers=2
+        num_workers=2,
+        vis=True
     )
 
     # build model architecture
-    model = get_instance(module_arch, 'arch', config)
-    model.summary()
+    model = get_instance(RefineNet, 'arch', config)
+    print(model)
 
     # get function handles of loss and metrics
     loss_fn = getattr(module_loss, config['loss'])
@@ -41,42 +43,54 @@ def main(config, resume):
     model.eval()
 
     total_loss = 0.0
-    total_metrics = torch.zeros(len(metric_fns))
+    total_metrics = torch.zeros(len(metric_fns)).to(device)
 
     with torch.no_grad():
-        for i, (data, target) in enumerate(tqdm(data_loader)):
-            data, target = data.to(device), target.to(device)
+        for i, (data, target, image) in enumerate(data_loader):
+            data, target = data.to(device), target.float().to(device)
             output = model(data)
+            if visual:
+                visual_mask(image, output, target, i)
             #
             # save sample images, or do something with output here
             #
-            
-            # computing loss, metrics on test set
-            loss = loss_fn(output, target)
-            batch_size = data.shape[0]
-            total_loss += loss.item() * batch_size
-            for i, metric in enumerate(metric_fns):
-                total_metrics[i] += metric(output, target) * batch_size
 
-    n_samples = len(data_loader.sampler)
-    log = {'loss': total_loss / n_samples}
-    log.update({met.__name__ : total_metrics[i].item() / n_samples for i, met in enumerate(metric_fns)})
-    print(log)
+            # computing loss, metrics on test set
+            if config["arch"]["type"] == "HandSegNet":
+                target = torch.argmax(target.reshape(-1, 2), dim=1)
+                output = output.permute([0,2,3,1]).reshape(-1,2)
+            else:
+                target = torch.argmax(target.reshape(-1, 2), dim=1).reshape(-1).float()
+                output = output.permute([0,2,3,1]).reshape(-1)
+            
+            # loss = loss_fn(output, target)
+            # batch_size = data.shape[0]
+            # total_loss += loss.item() * batch_size
+            # for i, metric in enumerate(metric_fns):
+            #     total_metrics[i] += metric(output, target) * batch_size
+
+    # n_samples = len(data_loader.sampler)
+    # log = {'loss': total_loss / n_samples}
+    # log.update({met.__name__: total_metrics[i].item() / n_samples for i, met in enumerate(metric_fns)})
+    # print(log)
+    
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Template')
 
     parser.add_argument('-r', '--resume', default=None, type=str,
-                           help='path to latest checkpoint (default: None)')
+                        help='path to latest checkpoint (default: None)')
     parser.add_argument('-d', '--device', default=None, type=str,
-                           help='indices of GPUs to enable (default: all)')
+                        help='indices of GPUs to enable (default: all)')
+    parser.add_argument('--visual', action='store_true',
+                        help='visualize the regression result(boxes)')
 
     args = parser.parse_args()
 
     if args.resume:
         config = torch.load(args.resume)['config']
     if args.device:
-        os.environ["CUDA_VISIBLE_DEVICES"]=args.device
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.device
 
-    main(config, args.resume)
+    main(config, args.resume, args.visual)
